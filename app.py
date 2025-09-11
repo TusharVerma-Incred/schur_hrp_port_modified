@@ -783,12 +783,91 @@ def main():
             if result['dropped_for_data_insufficiency']:
                 st.warning(f"⚠️ Dropped tickers (insufficient data): {', '.join(result['dropped_for_data_insufficiency'])}")
         
+        # with tab2:
+        #     st.subheader("Hierarchical Clustering Dendrogram")
+            
+        #     try:
+        #         # Create dendrogram
+        #         fig, ax = plt.subplots(figsize=(14, 8))
+                
+        #         # Build dendrogram data
+        #         cov = result['cov_all']
+                
+        #         # Check if we have enough data
+        #         if len(cov) < 2:
+        #             st.error("Need at least 2 assets to create a dendrogram")
+        #         else:
+        #             corr = cov_to_corr(cov)
+        #             dist = correl_dist(corr.values)
+        #             Z = linkage(squareform(dist, checks=False), method='single')
+                    
+        #             # Add weights to labels
+        #             weights = result['final_weights']
+        #             labels = [f"{t} ({weights[t]*100:+.2f}%)" for t in cov.index]
+                    
+        #             # Plot
+        #             dendro = dendrogram(
+        #                 Z,
+        #                 labels=labels,
+        #                 ax=ax,
+        #                 orientation='top',
+        #                 leaf_font_size=9
+        #             )
+                    
+        #             # Color labels by side
+        #             for i, tick in enumerate(ax.get_xticklabels()):
+        #                 ticker = tick.get_text().split(' ')[0]
+        #                 if ticker in st.session_state.get('long_tickers', []):
+        #                     tick.set_color('green')
+        #                 else:
+        #                     tick.set_color('red')
+        #                 tick.set_rotation(35)
+        #                 tick.set_rotation_mode("anchor")
+        #                 tick.set_horizontalalignment("right")
+                    
+        #             ax.set_title("Portfolio Dendrogram (Single Linkage)")
+        #             ax.set_ylabel("Distance")
+        #             plt.tight_layout()
+        #             st.pyplot(fig)
+        #             plt.close(fig)  # Important: close the figure
+                    
+        #             # Cluster analysis
+        #             st.subheader("Cluster Analysis")
+        #             cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.01)
+        #             clusters = fcluster(Z, t=cut_distance, criterion="distance")
+                    
+        #             cluster_df = pd.DataFrame({
+        #                 'Ticker': cov.index,
+        #                 'Cluster': clusters,
+        #                 'Weight (%)': weights.values * 100
+        #             })
+                    
+        #             st.write(f"Number of clusters at cut distance {cut_distance:.2f}: {len(np.unique(clusters))}")
+                    
+        #             # Show clusters
+        #             for cluster_id in np.unique(clusters):
+        #                 cluster_tickers = cluster_df[cluster_df['Cluster'] == cluster_id]['Ticker'].tolist()
+        #                 cluster_weights = cluster_df[cluster_df['Cluster'] == cluster_id]['Weight (%)'].sum()
+        #                 st.write(f"**Cluster {cluster_id} (Total Weight: {cluster_weights:.2f}%):** {', '.join(cluster_tickers)}")
+                    
+        #     except Exception as e:
+        #         st.error(f"Error creating dendrogram: {str(e)}")
+        
         with tab2:
             st.subheader("Hierarchical Clustering Dendrogram")
             
             try:
-                # Create dendrogram
-                fig, ax = plt.subplots(figsize=(14, 8))
+                # Quality settings
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    fig_width = st.number_input("Figure Width (inches)", min_value=10, max_value=30, value=16, step=2)
+                with col2:
+                    fig_height = st.number_input("Figure Height (inches)", min_value=6, max_value=20, value=10, step=2)
+                with col3:
+                    dpi_setting = st.selectbox("Image Quality (DPI)", options=[150, 300, 600, 1200], index=1)
+                
+                # Create dendrogram with custom size and DPI
+                fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=100)  # Display DPI
                 
                 # Build dendrogram data
                 cov = result['cov_all']
@@ -805,16 +884,16 @@ def main():
                     weights = result['final_weights']
                     labels = [f"{t} ({weights[t]*100:+.2f}%)" for t in cov.index]
                     
-                    # Plot
+                    # Plot with larger font
                     dendro = dendrogram(
                         Z,
                         labels=labels,
                         ax=ax,
                         orientation='top',
-                        leaf_font_size=9
+                        leaf_font_size=11  # Increased from 9
                     )
                     
-                    # Color labels by side
+                    # Color labels by side with better formatting
                     for i, tick in enumerate(ax.get_xticklabels()):
                         ticker = tick.get_text().split(' ')[0]
                         if ticker in st.session_state.get('long_tickers', []):
@@ -824,16 +903,74 @@ def main():
                         tick.set_rotation(35)
                         tick.set_rotation_mode("anchor")
                         tick.set_horizontalalignment("right")
+                        tick.set_fontsize(10)  # Set consistent font size
+                        tick.set_fontweight('semibold')  # Make text bolder
                     
-                    ax.set_title("Portfolio Dendrogram (Single Linkage)")
-                    ax.set_ylabel("Distance")
+                    # Improve title and labels
+                    ax.set_title("Portfolio Dendrogram (Single Linkage)", fontsize=14, fontweight='bold')
+                    ax.set_ylabel("Distance", fontsize=12, fontweight='semibold')
+                    ax.set_xlabel("Assets", fontsize=12, fontweight='semibold')
+                    
+                    # Add grid for better readability
+                    ax.yaxis.grid(True, linestyle='--', alpha=0.3)
+                    
+                    # Thicker dendrogram lines
+                    for line in ax.lines:
+                        line.set_linewidth(1.5)
+                    
                     plt.tight_layout()
+                    
+                    # Display in Streamlit
                     st.pyplot(fig)
+                    
+                    # Export options
+                    st.subheader("Export Dendrogram")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    # Save as PNG with high DPI
+                    with col1:
+                        png_buffer = io.BytesIO()
+                        fig.savefig(png_buffer, format='png', dpi=dpi_setting, bbox_inches='tight', 
+                                facecolor='white', edgecolor='none')
+                        png_buffer.seek(0)
+                        st.download_button(
+                            label=f"📥 Download PNG ({dpi_setting} DPI)",
+                            data=png_buffer,
+                            file_name=f"dendrogram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                            mime="image/png"
+                        )
+                    
+                    # Save as PDF (vector format - highest quality)
+                    with col2:
+                        pdf_buffer = io.BytesIO()
+                        fig.savefig(pdf_buffer, format='pdf', bbox_inches='tight',
+                                facecolor='white', edgecolor='none')
+                        pdf_buffer.seek(0)
+                        st.download_button(
+                            label="📥 Download PDF (Vector)",
+                            data=pdf_buffer,
+                            file_name=f"dendrogram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                            mime="application/pdf"
+                        )
+                    
+                    # # Save as SVG (vector format - editable)
+                    # with col3:
+                    #     svg_buffer = io.BytesIO()
+                    #     fig.savefig(svg_buffer, format='svg', bbox_inches='tight',
+                    #             facecolor='white', edgecolor='none')
+                    #     svg_buffer.seek(0)
+                    #     st.download_button(
+                    #         label="📥 Download SVG (Editable)",
+                    #         data=svg_buffer,
+                    #         file_name=f"dendrogram_{datetime.now().strftime('%Y%m%d_%H%M%S')}.svg",
+                    #         mime="image/svg+xml"
+                    #     )
+                    
                     plt.close(fig)  # Important: close the figure
                     
                     # Cluster analysis
                     st.subheader("Cluster Analysis")
-                    cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.01)
+                    cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.01)  # Already updated to 0.01
                     clusters = fcluster(Z, t=cut_distance, criterion="distance")
                     
                     cluster_df = pd.DataFrame({
@@ -851,8 +988,9 @@ def main():
                         st.write(f"**Cluster {cluster_id} (Total Weight: {cluster_weights:.2f}%):** {', '.join(cluster_tickers)}")
                     
             except Exception as e:
-                st.error(f"Error creating dendrogram: {str(e)}")
-        
+                st.error(f"Error creating dendrogram: {str(e)}")        
+
+
         with tab3:
             st.subheader("Risk Analysis")
             
@@ -915,10 +1053,10 @@ def main():
                 use_container_width=True
             )
             
-            # Diagnostics
-            st.write("**Portfolio Diagnostics:**")
-            diag_df = pd.DataFrame(list(result['diagnostics'].items()), columns=['Metric', 'Value'])
-            st.dataframe(diag_df, use_container_width=True)
+            # # Diagnostics
+            # st.write("**Portfolio Diagnostics:**")
+            # diag_df = pd.DataFrame(list(result['diagnostics'].items()), columns=['Metric', 'Value'])
+            # st.dataframe(diag_df, use_container_width=True)
         
         with tab4:
             st.subheader("Correlation Matrix")
@@ -1022,4 +1160,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
