@@ -833,7 +833,7 @@ def main():
                     
                     # Cluster analysis
                     st.subheader("Cluster Analysis")
-                    cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.05)
+                    cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.01)
                     clusters = fcluster(Z, t=cut_distance, criterion="distance")
                     
                     cluster_df = pd.DataFrame({
@@ -1022,3 +1022,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
