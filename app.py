@@ -1,8 +1,10 @@
 """
-Complete Schur-HRP Portfolio Optimizer Web App
-Save this as app.py and run with: streamlit run app.py
+Complete Schur-HRP Portfolio Optimizer Web App - FIXED VERSION
+Save this as app.py and deploy to Streamlit Cloud
 """
 
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for Streamlit Cloud
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -784,83 +786,124 @@ def main():
         with tab2:
             st.subheader("Hierarchical Clustering Dendrogram")
             
-            # Create dendrogram
-            fig, ax = plt.subplots(figsize=(14, 8))
-            
-            # Build dendrogram data
-            cov = result['cov_all']
-            corr = cov_to_corr(cov)
-            dist = correl_dist(corr.values)
-            Z = linkage(squareform(dist, checks=False), method='single')
-            
-            # Add weights to labels
-            weights = result['final_weights']
-            labels = [f"{t} ({weights[t]*100:+.2f}%)" for t in cov.index]
-            
-            # Plot
-            dendro = dendrogram(
-                Z,
-                labels=labels,
-                ax=ax,
-                orientation='top',
-                leaf_font_size=9
-            )
-            
-            # Color labels by side
-            for i, tick in enumerate(ax.get_xticklabels()):
-                ticker = tick.get_text().split(' ')[0]
-                if ticker in st.session_state['long_tickers']:
-                    tick.set_color('green')
+            try:
+                # Create dendrogram
+                fig, ax = plt.subplots(figsize=(14, 8))
+                
+                # Build dendrogram data
+                cov = result['cov_all']
+                
+                # Check if we have enough data
+                if len(cov) < 2:
+                    st.error("Need at least 2 assets to create a dendrogram")
                 else:
-                    tick.set_color('red')
-                tick.set_rotation(35)
-                tick.set_rotation_mode("anchor")
-                tick.set_horizontalalignment("right")
-            
-            ax.set_title("Portfolio Dendrogram (Single Linkage)")
-            ax.set_ylabel("Distance")
-            plt.tight_layout()
-            st.pyplot(fig)
-            
-            # Cluster analysis
-            st.subheader("Cluster Analysis")
-            cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.05)
-            clusters = fcluster(Z, t=cut_distance, criterion="distance")
-            
-            cluster_df = pd.DataFrame({
-                'Ticker': cov.index,
-                'Cluster': clusters,
-                'Weight (%)': weights.values * 100
-            })
-            
-            st.write(f"Number of clusters at cut distance {cut_distance:.2f}: {len(np.unique(clusters))}")
-            
-            # Show clusters
-            for cluster_id in np.unique(clusters):
-                cluster_tickers = cluster_df[cluster_df['Cluster'] == cluster_id]['Ticker'].tolist()
-                cluster_weights = cluster_df[cluster_df['Cluster'] == cluster_id]['Weight (%)'].sum()
-                st.write(f"**Cluster {cluster_id} (Total Weight: {cluster_weights:.2f}%):** {', '.join(cluster_tickers)}")
+                    corr = cov_to_corr(cov)
+                    dist = correl_dist(corr.values)
+                    Z = linkage(squareform(dist, checks=False), method='single')
+                    
+                    # Add weights to labels
+                    weights = result['final_weights']
+                    labels = [f"{t} ({weights[t]*100:+.2f}%)" for t in cov.index]
+                    
+                    # Plot
+                    dendro = dendrogram(
+                        Z,
+                        labels=labels,
+                        ax=ax,
+                        orientation='top',
+                        leaf_font_size=9
+                    )
+                    
+                    # Color labels by side
+                    for i, tick in enumerate(ax.get_xticklabels()):
+                        ticker = tick.get_text().split(' ')[0]
+                        if ticker in st.session_state.get('long_tickers', []):
+                            tick.set_color('green')
+                        else:
+                            tick.set_color('red')
+                        tick.set_rotation(35)
+                        tick.set_rotation_mode("anchor")
+                        tick.set_horizontalalignment("right")
+                    
+                    ax.set_title("Portfolio Dendrogram (Single Linkage)")
+                    ax.set_ylabel("Distance")
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close(fig)  # Important: close the figure
+                    
+                    # Cluster analysis
+                    st.subheader("Cluster Analysis")
+                    cut_distance = st.slider("Cut Distance", 0.2, 0.8, 0.45, 0.05)
+                    clusters = fcluster(Z, t=cut_distance, criterion="distance")
+                    
+                    cluster_df = pd.DataFrame({
+                        'Ticker': cov.index,
+                        'Cluster': clusters,
+                        'Weight (%)': weights.values * 100
+                    })
+                    
+                    st.write(f"Number of clusters at cut distance {cut_distance:.2f}: {len(np.unique(clusters))}")
+                    
+                    # Show clusters
+                    for cluster_id in np.unique(clusters):
+                        cluster_tickers = cluster_df[cluster_df['Cluster'] == cluster_id]['Ticker'].tolist()
+                        cluster_weights = cluster_df[cluster_df['Cluster'] == cluster_id]['Weight (%)'].sum()
+                        st.write(f"**Cluster {cluster_id} (Total Weight: {cluster_weights:.2f}%):** {', '.join(cluster_tickers)}")
+                    
+            except Exception as e:
+                st.error(f"Error creating dendrogram: {str(e)}")
         
         with tab3:
             st.subheader("Risk Analysis")
             
-            # Risk contributions
-            risk_df = result['risk_contributions']
+            # Get and clean risk contributions
+            risk_df = result['risk_contributions'].copy()
+            risk_df = risk_df.reset_index(drop=True)
             
-            # Plot risk contributions
-            fig = px.treemap(
-                risk_df,
-                path=['Side', 'Ticker'],
-                values='AbsPctRC',
-                title="Risk Contribution by Position",
-                color='PctRC',
-                color_continuous_scale='RdYlGn_r',
-                hover_data={'Weight': ':.2%', 'PctRC': ':.2%'}
-            )
-            fig.update_traces(textinfo="label+value+percent parent")
-            st.plotly_chart(fig, use_container_width=True)
+            # Ensure numeric columns are numeric
+            numeric_cols = ['Weight', 'MRC', 'RC', 'PctRC', 'AbsWeight', 'AbsRC', 'AbsPctRC']
+            for col in numeric_cols:
+                if col in risk_df.columns:
+                    risk_df[col] = pd.to_numeric(risk_df[col], errors='coerce').fillna(0)
             
-            # Risk metrics table
+            # Try to create treemap, with fallback options
+            chart_created = False
+            
+            # Try sunburst first (more stable than treemap)
+            try:
+                fig = px.sunburst(
+                    risk_df,
+                    path=['Side', 'Ticker'],
+                    values='AbsPctRC',
+                    title="Risk Contribution by Position",
+                    color='PctRC',
+                    color_continuous_scale='RdYlGn_r'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                chart_created = True
+            except:
+                pass
+            
+            # If sunburst fails, try bar chart
+            if not chart_created:
+                try:
+                    fig = px.bar(
+                        risk_df.sort_values('AbsPctRC', ascending=True),
+                        x='AbsPctRC',
+                        y='Ticker',
+                        color='Side',
+                        orientation='h',
+                        title="Risk Contribution by Position (%)",
+                        color_discrete_map={'Long': 'green', 'Short': 'red'},
+                        labels={'AbsPctRC': 'Risk Contribution (%)'}
+                    )
+                    fig.update_traces(texttemplate='%{x:.1f}%', textposition='outside')
+                    st.plotly_chart(fig, use_container_width=True)
+                    chart_created = True
+                except:
+                    st.warning("Could not create risk contribution chart")
+            
+            # Risk metrics table (always show this)
             st.write("**Per-Position Risk Metrics:**")
             display_df = risk_df[['Ticker', 'Side', 'Weight', 'MRC', 'RC', 'PctRC']].copy()
             display_df['Weight'] = display_df['Weight'] * 100
